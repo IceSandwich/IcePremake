@@ -19,14 +19,47 @@ Go to the [premake release](https://github.com/premake/premake-core/releases) an
 
 Extract the `premake5.exe` file into the `path-to-your-project/premake/bin` folder.
 
-3. Write your module.
+3. Write your modules.
+
+We organize the struture as follows(Just a suggestion, not mandatory).
+
+``` txt
+├─ProjectLib
+│  ├─src
+│  │   └─**.cpp
+│  └─premake5.lua
+├─ProjectExe
+│  ├─src
+│  │   └─test.cpp
+│  └─premake5.lua
+├─vendor
+│  ├─spdlog
+│  │  └─...
+│  └─dependencies.lua
+├─premake
+│  ├─bin
+│  │  └─premake5.exe
+│  └─**.lua
+└─premake5.lua
+```
+
+In the `premake5.lua` file under the project root folder.
 
 ``` lua
--- Include IceModule
-local Pkg = require("premake/module")
+workspace "MyProject"
+    architecture "x64"
+    startproject "ProjectExe"
 
--- Create a new module
-ProjectAModule = Pkg.New("ProjectA")
+    configurations { "Debug", "Release" }
+
+include "ProjectLib"
+include "ProjectExe"
+```
+
+In the `vendor/dependencies.lua` file, you should write the dependencies that your project needs.
+
+``` lua
+DependenciesDir = "%{wks.location}/vendor"
 
 -- Store all your dependencies in a table.
 Dependencies = {}
@@ -49,21 +82,35 @@ Dependencies["Vulkan"] = {
 }
 Dependencies["Spdlog"] = { -- spdlog is a header only library, so you don't need to link.
 	IncludeDirectories = {
-		"%{wks.location}/vendor/spdlog/include",
+		"%{DependenciesDir}/spdlog/include",
 	},
 }
+```
+
+In `ProjectLib/premake5.lua` file.
+
+``` lua
+-- Include IceModule and dependencies table.
+local Pkg = require("premake/module")
+include "../vendor/dependencies.lua"
+
+-- Create a new module.
+LibModule = Pkg.New("ProjectLib")
 
 -- Your library project configuration
-project(ProjectAModule.PackageName)
+project(LibModule.PackageName)
 	kind "StaticLib"
 	language "C++"
 	cppdialect "c++17"
 	staticruntime "on"
 
+	targetdir ("%{wks.location}/build/%{prj.name}")
+    objdir ("%{wks.location}/build/%{prj.name}")
+
 	-- Define dependencies in module
-	ProjectAModule:Dependencies {
+	LibModule:Dependencies {
 		Pkg.PUBLIC, -- Could be [PREIVATE, PUBLIC, INTERFACE]
-		Dependencies["Vulkan"], -- ProjectA's dependencies.
+		Dependencies["Vulkan"], -- ProjectLib's dependencies.
 	}
 
 	files {
@@ -76,34 +123,44 @@ project(ProjectAModule.PackageName)
 	}
 
 	-- If your project is a library, you should add the following code to tell other projects use the library this project generated.
-	table.insert(ProjectAModule.IncludeDirectories, "%{wks.location}/src")
-	table.insert(ProjectAModule.LinkLibraries, ProjectAModule.PackageName)
+	table.insert(LibModule.IncludeDirectories, "%{wks.location}/" .. LibModule.PackageName .. "/src")
+	table.insert(LibModule.LinkLibraries, LibModule.PackageName)
 
 	filter "configurations:Debug"
 		symbols "on"
 
 	filter "configurations:Release"
 		optimize "on"
+```
 
+In `ProjectExe/premake5.lua` file.
+
+``` lua
+-- Include IceModule and dependencies table.
+local Pkg = require("premake/module")
+include "../vendor/dependencies.lua"
 
 -- Create a new module
-ProjectBModule = Pkg.New("ProjectB")
+ExeModule = Pkg.New("ProjectExe")
 
 -- Your executable project configuration
-project(ProjectBModule.PackageName)
+project(ExeModule.PackageName)
 	kind "ConsoleApp"
 	language "C++"
 	cppdialect "C++17"
 	staticruntime "on"
 
-	ProjectBModule:Dependencies {
+	targetdir ("%{wks.location}/build/%{prj.name}")
+    objdir ("%{wks.location}/build/%{prj.name}")
+
+	ExeModule:Dependencies {
 		Pkg.PRIVATE,
 		Dependencies["Spdlog"], -- ProjectB's dependencies.
-		ProjectAModule,	-- Include ProjectA as library, also it will include vulkan as well because we use PUBLIC previously.
+		LibModule,	-- Include ProjectLib as library, also it will include vulkan as well because we use PUBLIC previously.
 	}
 
 	files {
-		"test/test.cpp"
+		"src/test.cpp"
 	}
 
 	filter "configurations:Debug"
