@@ -6,11 +6,11 @@ In short, it provides a package management system like CMake.
 
 # Usage
 
-1. Clone this repository.
+1. Use this repository as submodule.
 
 ``` bash
 cd path-to-your-project
-git clone https://github.com/IceSandwich/IcePremake.git premake
+git submodule add https://github.com/IceSandwich/IcePremake.git premake
 ```
 
 2. Download premake prebuilt binaray.
@@ -70,6 +70,7 @@ print("Detected Vulkan SDK: " .. VULKAN_SDK)
 Dependencies["Vulkan"] = {
 	-- IncludeDirectories, LinkDirectories, LinkLibraries are optional.
 	-- You can use one of them or two of them.
+	PackageName = "Vulkan",
 	IncludeDirectories = {
 		VULKAN_SDK .. "/Include",
 	},
@@ -81,10 +82,43 @@ Dependencies["Vulkan"] = {
 	}
 }
 Dependencies["Spdlog"] = { -- spdlog is a header only library, so you don't need to link.
+	PackageName = "Spdlog",
 	IncludeDirectories = {
 		"%{DependenciesDir}/spdlog/include",
 	},
 }
+-- Or use prebuilt library from interneet
+if os.target() == "windows" then
+	local glfwDir = "thirdparties/glfw-3.4.bin.WIN64"
+
+	GLFWLibDir = {}
+	GLFWLibDir["vs2022"] = "lib-vc2022"
+
+	local libPath = GLFWLibDir[_ACTION]
+	if type(libPath) == "nil" then
+		error("GLFW cannot find the suitable prebuilt library for " .. _ACTION)
+	end
+
+	Dependencies["GLFW"] = {
+		PackageName = "GLFW",
+		Url = "https://github.com/glfw/glfw/releases/download/3.4/glfw-3.4.bin.WIN64.zip",
+		Filename = "thirdparties/glfw.zip",
+		ExtractDir = "thirdparties",
+		KeepFile = true,
+
+		IncludeDirectories = {
+			glfwDir .. "/include",
+		},
+		LinkDirectories = {
+			glfwDir .. "/" .. libPath,
+		},
+		LinkLibraries = {
+			"glfw3"
+		}
+	}
+else
+	error("not support os: ".. os.target())
+end
 ```
 
 In `ProjectLib/premake5.lua` file.
