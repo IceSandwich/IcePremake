@@ -8,6 +8,8 @@ local exports = {
 local ModuleClass = {}
 ModuleClass.__index = ModuleClass
 
+local Network = require("Network")
+
 function exports.New(packageName)
     local mc = {
         PackageName = packageName or "",
@@ -17,7 +19,48 @@ function exports.New(packageName)
     }
     setmetatable(mc, ModuleClass)
     -- print("New package:", packageName, "===>", mc.PackageName)
+	print("[IcePremake] Package " .. packageName)
     return mc
+end
+
+function solveURL(dependency)
+	local url = dependency.Url
+	local filename = dependency.Filename
+	local hash = dependency.Hash
+
+	if type(url) == "nil" then
+		return
+	end
+
+	if type(filename) == "nil" then
+		error("[IcePremake] Dependency " .. dependency.PackageName .. " has no `Filename` property. When you use `Url`, you must specify `Filename` and `Hash`(optional) at the same time.")
+	end
+
+	if os.isfile(filename) then
+		if type(hash) ~= "nil" then
+			-- TODO: hash validation
+			print("[IcePremake] Dependency file " .. filename .. " already exists. But IcePremake doesn't support hash validation yet. Skip validation.")
+		else
+			print("[IcePremake] Dependency file " .. filename .. " already exists. Skip download.")
+		end
+	else
+		local basedir = path.getdirectory(filename)
+		if os.mkdir(basedir) == false then
+			error("[IcePremake] Failed to make directories: " .. basedir)
+		end
+		Network.Download(url, filename)
+	end
+
+	local extractDir = dependency.ExtractDir
+	if type(extractDir) ~= "nil" then
+		print("[IcePremake] \tExtract zip to " .. extractDir)
+		zip.extract(filename, extractDir)
+		local keepFile = dependency.KeepFile or false
+		if keepFile == false then
+			print("[IcePremake] \tDelete cache file " .. filename)
+			os.remove(filename)
+		end
+	end
 end
 
 -- deps(LinkType, ...)
@@ -36,6 +79,15 @@ function ModuleClass:Dependencies(args)
 
     for i = 2, #args do
         local dependency = args[i]
+
+		local name = dependency.PackageName
+		if type(name) == "nil" then
+			error("[IcePremake] All Dependencies must have `PackageName` property. Please check your dependencies table.")
+		end
+
+		print("[IcePremake] Use package " .. name)
+
+		solveURL(dependency)
 
 		-- print("Using thirdparty libraray: " .. dependencyName)
         local includeDirectories = dependency.IncludeDirectories
